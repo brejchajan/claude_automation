@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 import subprocess
 import sys
@@ -9,6 +10,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config import default_pipeline_config, StageResult, Task, TaskResult
+from main import move_completed_tasks
 from pipeline import run_all_tasks
 from reporting import generate_report
 from task_parser import discover_tasks
@@ -19,9 +21,7 @@ def temp_repo(tmp_path: Path) -> Path:
     repo = tmp_path / "test_repo"
     repo.mkdir()
     subprocess.run(["git", "-C", str(repo), "init"], check=True)
-    subprocess.run(
-        ["git", "-C", str(repo), "config", "user.email", "test@test.com"], check=True
-    )
+    subprocess.run(["git", "-C", str(repo), "config", "user.email", "test@test.com"], check=True)
     subprocess.run(["git", "-C", str(repo), "config", "user.name", "Test"], check=True)
     (repo / "README.md").write_text("# Test")
     subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True)
@@ -143,9 +143,7 @@ def test_end_to_end_custom_stages(
 
     tasks_dir = tmp_path / "tasks"
     tasks_dir.mkdir()
-    (tasks_dir / "task1.md").write_text(
-        _make_task_md("Quick Fix", str(temp_repo), stages=["coder"])
-    )
+    (tasks_dir / "task1.md").write_text(_make_task_md("Quick Fix", str(temp_repo), stages=["coder"]))
 
     tasks = discover_tasks(tasks_dir)
     config = default_pipeline_config()
@@ -186,9 +184,7 @@ def test_end_to_end_retry_on_budget(
 
     tasks_dir = tmp_path / "tasks"
     tasks_dir.mkdir()
-    (tasks_dir / "task1.md").write_text(
-        _make_task_md("Budget Task", str(temp_repo), stages=["planner"])
-    )
+    (tasks_dir / "task1.md").write_text(_make_task_md("Budget Task", str(temp_repo), stages=["planner"]))
 
     tasks = discover_tasks(tasks_dir)
     config = default_pipeline_config()
@@ -225,15 +221,9 @@ def test_task_discovery_and_pipeline(
     tasks_dir = tmp_path / "tasks"
     tasks_dir.mkdir()
     (tasks_dir / "high.md").write_text(
-        _make_task_md(
-            "High Priority Task", str(temp_repo), priority=1, stages=["coder"]
-        )
+        _make_task_md("High Priority Task", str(temp_repo), priority=1, stages=["coder"])
     )
-    (tasks_dir / "low.md").write_text(
-        _make_task_md(
-            "Low Priority Task", str(temp_repo), priority=20, stages=["coder"]
-        )
-    )
+    (tasks_dir / "low.md").write_text(_make_task_md("Low Priority Task", str(temp_repo), priority=20, stages=["coder"]))
 
     tasks = discover_tasks(tasks_dir)
     assert len(tasks) == 2
@@ -327,9 +317,7 @@ def test_report_generation_end_to_end(tmp_path: Path) -> None:
     )
 
     logs_dir = tmp_path / "logs"
-    summary_path = generate_report(
-        [success_result, failed_result], "2026-03-21_100000", logs_dir
-    )
+    summary_path = generate_report([success_result, failed_result], "2026-03-21_100000", logs_dir)
 
     assert summary_path.exists()
     content = summary_path.read_text()
@@ -344,3 +332,64 @@ def test_report_generation_end_to_end(tmp_path: Path) -> None:
     assert "| planner | yes |" in content
     assert "| coder | no |" in content
     assert "| coder | yes |" in content
+
+
+def test_move_completed_tasks(tmp_path: Path) -> None:
+    tasks_dir = tmp_path / "tasks"
+    tasks_dir.mkdir()
+    tasks_done_dir = tmp_path / "tasks_done"
+
+    success_md = tasks_dir / "success_task.md"
+    success_md.write_text("---\ntitle: Success\nproject: /tmp/p\n---\nDo stuff.\n")
+
+    failed_md = tasks_dir / "failed_task.md"
+    failed_md.write_text("---\ntitle: Failed\nproject: /tmp/p\n---\nDo stuff.\n")
+
+    success_task = Task(
+        title="Success",
+        project="/tmp/p",
+        branch="auto/success",
+        model="m",
+        budget_per_stage=1.0,
+        priority=10,
+        stages=["coder"],
+        description="Do stuff.",
+        source_path=str(success_md),
+    )
+    failed_task = Task(
+        title="Failed",
+        project="/tmp/p",
+        branch="auto/failed",
+        model="m",
+        budget_per_stage=1.0,
+        priority=10,
+        stages=["coder"],
+        description="Do stuff.",
+        source_path=str(failed_md),
+    )
+
+    success_result = TaskResult(
+        task=success_task,
+        stage_results=[],
+        status="success",
+        branch_name="auto/success",
+        paused_at_stage=None,
+        accumulated_context={},
+    )
+    failed_result = TaskResult(
+        task=failed_task,
+        stage_results=[],
+        status="failed_at_coder",
+        branch_name="auto/failed",
+        paused_at_stage=None,
+        accumulated_context={},
+    )
+
+    logger = logging.getLogger("test")
+    move_completed_tasks([success_result, failed_result], tasks_done_dir, logger)
+
+    assert not success_md.exists()
+    assert (tasks_done_dir / "success_task.md").exists()
+
+    assert failed_md.exists()
+    assert not (tasks_done_dir / "failed_task.md").exists()

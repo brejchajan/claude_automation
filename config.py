@@ -29,6 +29,7 @@ class PipelineConfig:
     """Top-level configuration for the automation pipeline."""
 
     tasks_dir: str = "./tasks"
+    tasks_done_dir: str = "./tasks_done"
     logs_dir: str = "./logs"
     default_model: str = "claude-sonnet-4-5-20250514"
     schedule_cron: str = "0 2 * * *"
@@ -54,6 +55,7 @@ class Task:
     stages: List[str]
     description: str
     base_branch: Optional[str] = None
+    source_path: Optional[str] = None
 
 
 @dataclass

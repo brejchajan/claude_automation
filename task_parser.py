@@ -83,6 +83,7 @@ def parse_task(file_path: Path) -> Task:
         stages=stages,
         description=description,
         base_branch=base_branch,
+        source_path=str(file_path),
     )
 
 
