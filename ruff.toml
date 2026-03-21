@@ -1,0 +1,174 @@
+line-length = 120
+preview = true
+required-version = ">=0.14.11"
+fix = true
+unsafe-fixes = false
+
+[lint.pylint]
+max-args = 7
+max-branches = 12
+
+[lint.pydocstyle]
+convention = "google"
+
+[lint]
+select = [
+    "ALL",
+]
+ignore = [
+    # ANN - Type annotations
+    "ANN002",
+    "ANN003",
+    "ANN401",
+
+    # ARG - Unused arguments
+    "ARG001",
+
+    # B - Flake8-bugbear
+    "B028",
+    "B905",
+
+    # CPY - Copyright
+    "CPY001",
+
+    # D - Pydocstyle
+    "D100",
+    "D104",
+    "D107",
+    "D205",
+    "D212",
+    "D401",
+    "D413",
+
+    # FA - Flake8-future-annotations
+    "FA100",
+
+    # FBT - Flake8-boolean-trap
+    "FBT001",
+    "FBT002",
+    "FBT003",
+
+    # FURB - Refurb
+    "FURB101",
+    "FURB103",
+
+    # INP - Flake8-no-pep420
+    "INP",
+
+    # N - PEP8 naming
+    "N812",
+
+    "PERF203",
+
+    # PTH - Flake8-use-pathlib
+    "PTH123",
+    "PTH201",
+
+    # RET - Return values
+    "RET502",
+
+    # RUF - Ruff-specific rules
+    "RUF067",
+
+    # S - Bandit
+    "S311",
+    "S314",
+    "S405",
+    "S607",
+
+    # TC - Flake8-type-checking
+    "TC",
+
+    # TD - Flake8-todos
+    "TD003",
+
+    # TRY - Tryceratops
+    "TRY003",
+    "TRY004",
+    "TRY400",
+
+    # UP - Pyupgrade
+    "UP006",
+    "UP007",
+    "UP015",
+    "UP035",
+    "UP045",
+
+    "PLW1514",
+    "PYI041",
+
+    # Conflicting lint rules: https://docs.astral.sh/ruff/formatter/#conflicting-lint-rules
+    "W191",
+    "E111",
+    "E114",
+    "E117",
+    "D206",
+    "D300",
+    "Q000",
+    "Q001",
+    "Q002",
+    "Q003",
+    "COM812",
+    "COM819",
+    "ISC002",
+]
+
+[lint.per-file-ignores]
+"tests/*" = [
+    "S101", "S",
+    "D101", "D102", "D103",
+    "ANN001", "ANN201",
+    "PLR2004", "PLR0913", "PLR0917",
+    "RUF069",
+    "ARG002",
+    "PT009",
+    "B007",
+    "C408",
+    "PERF102", "PERF401",
+    "FURB113",
+    "PLC1901",
+    "SIM108",
+    "PLW1510",
+    "DOC201",
+    "T201",
+    "LOG015",
+    "DTZ005",
+    "EM102",
+    "RET504",
+]
+"**/test_*.py" = [
+    "S101", "S",
+    "D101", "D102", "D103",
+    "ANN001", "ANN201",
+    "PLR2004", "PLR0913", "PLR0917",
+    "RUF069",
+    "ARG002",
+    "PT009",
+    "B007",
+    "C408",
+    "PERF102", "PERF401",
+    "FURB113",
+    "PLC1901",
+    "SIM108",
+    "PLW1510",
+    "DOC201",
+    "T201",
+    "LOG015",
+    "DTZ005",
+    "EM102",
+    "RET504",
+]
+
+[lint.isort]
+combine-as-imports = true
+split-on-trailing-comma = false
+force-sort-within-sections = true
+order-by-type = false
+relative-imports-order = "closest-to-furthest"
+
+[format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+docstring-code-line-length = 120
+skip-magic-trailing-comma = false
