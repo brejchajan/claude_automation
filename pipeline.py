@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 from agents import run_agent
 from config import PipelineConfig, StageResult, Task, TaskResult
-from worktree import cleanup_worktree, commit_worktree, create_worktree, get_diff
+from worktree import branch_exists, cleanup_worktree, commit_worktree, create_worktree, get_diff
 
 logger = logging.getLogger(__name__)
 
@@ -253,7 +253,10 @@ def run_all_tasks(
     for task in sorted_tasks:
         if task.depends_on:
             dep_result = branch_to_result.get(task.depends_on)
-            if dep_result is None or dep_result.status != "success":
+            dep_satisfied = dep_result is not None and dep_result.status == "success"
+            if not dep_satisfied and dep_result is None:
+                dep_satisfied = branch_exists(Path(task.project), task.depends_on)
+            if not dep_satisfied:
                 logger.warning(
                     "Skipping task '%s' — dependency '%s' not met",
                     task.title,

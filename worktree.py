@@ -3,6 +3,21 @@ import subprocess  # noqa: S404
 from typing import Optional
 
 
+def branch_exists(repo_path: Path, branch_name: str) -> bool:
+    """Check whether a branch exists in the repository.
+
+    Returns:
+        bool: True if the branch exists, False otherwise.
+    """
+    result = subprocess.run(  # noqa: S603
+        ["git", "-C", str(repo_path), "rev-parse", "--verify", branch_name],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.returncode == 0
+
+
 def detect_default_branch(repo_path: Path) -> str:
     """Detect the current HEAD branch name of the repository.
 
