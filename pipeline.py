@@ -31,7 +31,7 @@ def build_stage_prompt(
     stage_config = config.stages[stage_name]
     parts: List[str] = [stage_config.system_prompt]
 
-    parts.append(f"\n\n## Task\n{task.description}")
+    parts.append(f"\n\n## Task\n**Branch:** {task.branch}\n\n{task.description}")
 
     if accumulated_context:
         context_section = "\n\n## Prior Stage Context"
@@ -117,7 +117,10 @@ def run_task(
 
             accumulated_context[stage_name] = result.output
 
-        commit_worktree(worktree_path, f"auto: {task.title}")
+        commit_worktree(
+            worktree_path,
+            f"{task.branch} {task.title}\n\nCREATED BY Claude Automation Tool",
+        )
 
         if not config.keep_worktrees:
             cleanup_worktree(Path(task.project), worktree_path)

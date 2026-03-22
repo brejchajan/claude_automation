@@ -9,7 +9,11 @@ DEFAULT_SAFETY_PROMPT: str = (
     "2. NEVER access or modify files outside the current working directory.\n"
     "3. NEVER ask questions to the user. Use project context and task description.\n"
     "4. NEVER run destructive git commands (reset --hard, clean -f, push --force).\n"
-    "5. NEVER install system-level packages or modify system configuration."
+    "5. NEVER install system-level packages or modify system configuration.\n"
+    "6. All commit messages MUST start with the branch name followed by a space and the message, "
+    "e.g., 'BDT-0001 Add authentication module'.\n"
+    "7. All commit messages MUST end with a blank line followed by 'CREATED BY Claude Automation Tool' "
+    "as the last line."
 )
 
 
