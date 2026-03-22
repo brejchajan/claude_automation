@@ -84,6 +84,14 @@ def test_detect_budget_depleted_false():
     assert detect_budget_depleted('{"result": "ok"}', "some normal error", 0) is False
 
 
+def test_detect_budget_depleted_false_limit_in_stdout():
+    assert detect_budget_depleted('{"result": "set the limit to 100"}', "", 0) is False
+
+
+def test_detect_budget_depleted_rate_limit():
+    assert detect_budget_depleted("", "rate limit reached", 1) is True
+
+
 @patch("agents.subprocess.run")
 def test_run_agent_success(mock_run):
     mock_run.return_value = MagicMock(
