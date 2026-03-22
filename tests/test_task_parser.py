@@ -37,9 +37,7 @@ def test_parse_task_full_frontmatter(tmp_path):
 
 def test_parse_task_minimal_frontmatter(tmp_path):
     md = tmp_path / "task.md"
-    md.write_text(
-        "---\ntitle: Fix Bug\nproject: /my/repo\n---\nFix the critical bug.\n"
-    )
+    md.write_text("---\ntitle: Fix Bug\nproject: /my/repo\n---\nFix the critical bug.\n")
     task = parse_task(md)
     assert task.title == "Fix Bug"
     assert task.project == "/my/repo"
@@ -84,29 +82,16 @@ def test_parse_task_missing_project(tmp_path):
 def test_parse_task_invalid_stage(tmp_path):
     md = tmp_path / "task.md"
     md.write_text(
-        "---\n"
-        "title: My Task\n"
-        "project: /my/repo\n"
-        "stages:\n"
-        "  - planner\n"
-        "  - invalid_stage\n"
-        "---\n"
-        "Description.\n"
+        "---\ntitle: My Task\nproject: /my/repo\nstages:\n  - planner\n  - invalid_stage\n---\nDescription.\n"
     )
     with pytest.raises(ValueError, match="Invalid stage"):
         parse_task(md)
 
 
 def test_discover_tasks_sorted_by_priority(tmp_path):
-    (tmp_path / "high.md").write_text(
-        "---\ntitle: High Priority\nproject: /repo\npriority: 1\n---\nHigh.\n"
-    )
-    (tmp_path / "low.md").write_text(
-        "---\ntitle: Low Priority\nproject: /repo\npriority: 20\n---\nLow.\n"
-    )
-    (tmp_path / "mid.md").write_text(
-        "---\ntitle: Mid Priority\nproject: /repo\npriority: 5\n---\nMid.\n"
-    )
+    (tmp_path / "high.md").write_text("---\ntitle: High Priority\nproject: /repo\npriority: 1\n---\nHigh.\n")
+    (tmp_path / "low.md").write_text("---\ntitle: Low Priority\nproject: /repo\npriority: 20\n---\nLow.\n")
+    (tmp_path / "mid.md").write_text("---\ntitle: Mid Priority\nproject: /repo\npriority: 5\n---\nMid.\n")
     tasks = discover_tasks(tmp_path)
     assert len(tasks) == 3
     assert tasks[0].priority == 1
@@ -117,3 +102,17 @@ def test_discover_tasks_sorted_by_priority(tmp_path):
 def test_discover_tasks_empty_dir(tmp_path):
     tasks = discover_tasks(tmp_path)
     assert tasks == []
+
+
+def test_parse_task_depends_on(tmp_path):
+    md = tmp_path / "task.md"
+    md.write_text("---\ntitle: Task B\nproject: /repo\nbranch: BDT-0002\ndepends_on: BDT-0001\n---\nDependent task.\n")
+    task = parse_task(md)
+    assert task.depends_on == "BDT-0001"
+
+
+def test_parse_task_no_depends_on(tmp_path):
+    md = tmp_path / "task.md"
+    md.write_text("---\ntitle: Task A\nproject: /repo\n---\nIndependent task.\n")
+    task = parse_task(md)
+    assert task.depends_on is None

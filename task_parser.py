@@ -71,8 +71,6 @@ def parse_task(file_path: Path) -> Task:
         msg = f"Invalid stage(s) {invalid} in {file_path}. Valid stages: {VALID_STAGES}"
         raise ValueError(msg)
 
-    base_branch = frontmatter.get("base_branch", None)
-
     return Task(
         title=title,
         project=project,
@@ -82,7 +80,8 @@ def parse_task(file_path: Path) -> Task:
         priority=priority,
         stages=stages,
         description=description,
-        base_branch=base_branch,
+        base_branch=frontmatter.get("base_branch", None),
+        depends_on=frontmatter.get("depends_on", None),
         source_path=str(file_path),
     )
 

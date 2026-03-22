@@ -8,14 +8,21 @@ from typing import List
 from config import StageConfig, StageResult
 
 
-def build_command(stage_config: StageConfig, prompt: str, model: str, safety_prompt: str) -> List[str]:
+def build_command(
+    stage_config: StageConfig,
+    prompt: str,
+    model: str,
+    safety_prompt: str,
+    working_dir: Path,
+) -> List[str]:
     """Build the shell command list to invoke the claude CLI agent.
 
     Returns:
         List[str]: Command list suitable for passing to subprocess.
     """
     cmd_str = (
-        f"source ~/.bashrc && claude -p {shlex.quote(prompt)}"
+        f"source ~/.bashrc && cd {shlex.quote(str(working_dir))}"
+        f" && claude -p {shlex.quote(prompt)}"
         f" --allowedTools {shlex.quote(stage_config.allowed_tools)}"
         f" --permission-mode {stage_config.permission_mode}"
         f" --output-format json"
@@ -72,7 +79,7 @@ def run_agent(
     Returns:
         StageResult: Result containing output, success flag, and budget status.
     """
-    cmd = build_command(stage_config, prompt, model, safety_prompt)
+    cmd = build_command(stage_config, prompt, model, safety_prompt, working_dir)
     start = time.monotonic()
     try:
         result = subprocess.run(  # noqa: S603

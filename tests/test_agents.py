@@ -21,9 +21,12 @@ SAFETY = "do not do bad things"
 MODEL = "claude-test-model"
 
 
+WORK_DIR = Path("/tmp/worktree")
+
+
 def test_build_command_planner():
     cfg = _planner_config()
-    cmd = build_command(cfg, "plan this", MODEL, SAFETY)
+    cmd = build_command(cfg, "plan this", MODEL, SAFETY, WORK_DIR)
     assert cmd[0] == "bash"
     assert cmd[1] == "-c"
     bash_str = cmd[2]
@@ -31,9 +34,16 @@ def test_build_command_planner():
     assert cfg.allowed_tools in bash_str
 
 
+def test_build_command_includes_cd():
+    cfg = _planner_config()
+    cmd = build_command(cfg, "plan this", MODEL, SAFETY, WORK_DIR)
+    bash_str = cmd[2]
+    assert "cd /tmp/worktree" in bash_str
+
+
 def test_build_command_coder():
     cfg = _coder_config()
-    cmd = build_command(cfg, "code this", MODEL, SAFETY)
+    cmd = build_command(cfg, "code this", MODEL, SAFETY, WORK_DIR)
     bash_str = cmd[2]
     assert "--permission-mode acceptEdits" in bash_str
     assert cfg.allowed_tools in bash_str
@@ -42,15 +52,9 @@ def test_build_command_coder():
 def test_build_command_escapes_quotes():
     cfg = _planner_config()
     prompt = "it's a test with 'quotes'"
-    cmd = build_command(cfg, prompt, MODEL, SAFETY)
+    cmd = build_command(cfg, prompt, MODEL, SAFETY, WORK_DIR)
     bash_str = cmd[2]
-    assert (
-        "'"
-        not in bash_str.split("claude -p ")[1]
-        .split(" --allowedTools")[0]
-        .replace("'\"'\"'", "")
-        or True
-    )
+    assert "'" not in bash_str.split("claude -p ")[1].split(" --allowedTools")[0].replace("'\"'\"'", "") or True
     result = subprocess.run(
         ["bash", "-c", f"echo {bash_str.split('claude -p ')[1].split(' --')[0]}"],
         capture_output=True,

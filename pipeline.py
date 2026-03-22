@@ -1,8 +1,13 @@
+from __future__ import annotations
+
 from copy import deepcopy
 import logging
 from pathlib import Path
 import time
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import Callable
 
 from agents import run_agent
 from config import PipelineConfig, StageResult, Task, TaskResult
@@ -138,20 +143,47 @@ def run_task(
         )
 
 
-def run_all_tasks(tasks: List[Task], config: PipelineConfig) -> List[TaskResult]:
-    """Run all tasks in priority order, retrying budget-paused tasks within the retry window.
+def topological_sort(tasks: List[Task]) -> List[Task]:
+    """Sort tasks so that dependencies run before dependents.
+
+    Args:
+        tasks: list of tasks, possibly with depends_on references.
 
     Returns:
-        List[TaskResult]: Results for every task in the same order as submitted.
+        List[Task]: Tasks in dependency-respecting order, with priority as tiebreaker.
     """
-    sorted_tasks = sorted(tasks, key=lambda t: t.priority)
-    results: List[TaskResult] = []
+    branch_map: Dict[str, Task] = {t.branch: t for t in tasks}
+    visited: set[str] = set()
+    in_stack: set[str] = set()
+    result: List[Task] = []
 
-    for task in sorted_tasks:
-        logger.info("Starting task '%s' (priority=%d)", task.title, task.priority)
-        result = run_task(task, config)
-        results.append(result)
+    def _visit(branch: str) -> None:
+        if branch in in_stack:
+            msg = f"Circular dependency detected involving '{branch}'"
+            raise ValueError(msg)
+        if branch in visited:
+            return
+        in_stack.add(branch)
+        task = branch_map[branch]
+        if task.depends_on and task.depends_on in branch_map:
+            _visit(task.depends_on)
+        in_stack.discard(branch)
+        visited.add(branch)
+        result.append(task)
 
+    for task in sorted(tasks, key=lambda t: t.priority):
+        if task.branch not in visited:
+            _visit(task.branch)
+
+    return result
+
+
+def _retry_paused_tasks(
+    results: List[TaskResult],
+    config: PipelineConfig,
+    on_cycle_complete: Optional[Callable[[List[TaskResult]], None]],
+) -> None:
+    """Retry budget-paused tasks in-place within the configured retry window."""
     start_time = time.monotonic()
 
     while True:
@@ -191,5 +223,60 @@ def run_all_tasks(tasks: List[Task], config: PipelineConfig) -> List[TaskResult]
                 worktree_path=wt_path,
             )
             results[i] = new_result
+
+        if on_cycle_complete is not None:
+            on_cycle_complete(results)
+
+
+def run_all_tasks(
+    tasks: List[Task],
+    config: PipelineConfig,
+    on_cycle_complete: Optional[Callable[[List[TaskResult]], None]] = None,
+) -> List[TaskResult]:
+    """Run all tasks respecting dependencies, retrying budget-paused tasks.
+
+    Args:
+        tasks: list of tasks to run.
+        config: pipeline configuration.
+        on_cycle_complete: optional callback invoked after each cycle with current results.
+
+    Returns:
+        List[TaskResult]: Results for every task in the same order as submitted.
+    """
+    sorted_tasks = topological_sort(tasks)
+    results: List[TaskResult] = []
+    branch_to_result: Dict[str, TaskResult] = {}
+
+    for task in sorted_tasks:
+        if task.depends_on:
+            dep_result = branch_to_result.get(task.depends_on)
+            if dep_result is None or dep_result.status != "success":
+                logger.warning(
+                    "Skipping task '%s' — dependency '%s' not met",
+                    task.title,
+                    task.depends_on,
+                )
+                result = TaskResult(
+                    task=task,
+                    stage_results=[],
+                    status="skipped_dependency",
+                    branch_name=task.branch,
+                    paused_at_stage=None,
+                    accumulated_context={},
+                )
+                results.append(result)
+                branch_to_result[task.branch] = result
+                continue
+            task.base_branch = task.depends_on
+
+        logger.info("Starting task '%s' (priority=%d)", task.title, task.priority)
+        result = run_task(task, config)
+        results.append(result)
+        branch_to_result[task.branch] = result
+
+    if on_cycle_complete is not None:
+        on_cycle_complete(results)
+
+    _retry_paused_tasks(results, config, on_cycle_complete)
 
     return results

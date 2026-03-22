@@ -39,7 +39,7 @@ class PipelineConfig:
     safety_prompt: str = DEFAULT_SAFETY_PROMPT
     stages: Dict[str, StageConfig] = field(default_factory=dict)
     retry_window_hours: float = 12.0
-    retry_interval_minutes: int = 60
+    retry_interval_minutes: int = 10
 
 
 @dataclass
@@ -55,6 +55,7 @@ class Task:
     stages: List[str]
     description: str
     base_branch: Optional[str] = None
+    depends_on: Optional[str] = None
     source_path: Optional[str] = None
 
 
@@ -121,7 +122,11 @@ def default_pipeline_config() -> PipelineConfig:
             system_prompt=(
                 "You are a QA engineer. Run the project's test suite. "
                 "If tests fail due to recent changes, fix the code. "
-                "If no tests exist, create appropriate tests. Summarize test results."
+                "If no tests exist, create appropriate tests. "
+                "If the project cannot be tested programmatically "
+                "(e.g., iOS/Xcode projects without a working test target), "
+                "skip test execution and instead review the code for correctness. "
+                "Summarize test results."
             ),
         ),
     }

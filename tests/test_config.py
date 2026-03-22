@@ -58,4 +58,4 @@ def test_pipeline_config_defaults():
     assert config.global_budget_cap_usd == 10.0
     assert config.keep_worktrees is True
     assert config.retry_window_hours == 12.0
-    assert config.retry_interval_minutes == 60
+    assert config.retry_interval_minutes == 10
