@@ -54,7 +54,7 @@ def detect_budget_depleted(stdout: str, stderr: str, return_code: int) -> bool:
     Returns:
         bool: True if budget depletion is detected, False otherwise.
     """
-    budget_phrases = ["budget depleted", "budget exceeded", "budget limit", "rate limit"]
+    budget_phrases = ["budget depleted", "budget exceeded", "budget limit", "rate limit", "you've hit your limit"]
     combined = (stderr or "").lower()
     if any(phrase in combined for phrase in budget_phrases):
         return True
@@ -63,6 +63,10 @@ def detect_budget_depleted(stdout: str, stderr: str, return_code: int) -> bool:
         error_field = str(data.get("error", "")).lower()
         if any(phrase in error_field for phrase in budget_phrases):
             return True
+        if data.get("stop_reason", "") == "stop_sequence":
+            result_field = str(data.get("result", "")).lower()
+            if any(phrase in result_field for phrase in budget_phrases):
+                return True
     except (json.JSONDecodeError, AttributeError):
         pass
     return False
