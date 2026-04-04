@@ -63,7 +63,8 @@ def run_pipeline(config: PipelineConfig, task_file: Optional[str] = None) -> Non
         move_completed_tasks(results, tasks_done_dir, logger)
         logger.info("Cycle report: %s", report_path)
 
-    run_all_tasks(tasks, config, on_cycle_complete=_on_cycle_complete)
+    tasks_dir_path = None if task_file is not None else Path(config.tasks_dir)
+    run_all_tasks(tasks, config, on_cycle_complete=_on_cycle_complete, tasks_dir=tasks_dir_path)
 
     logger.info("Pipeline complete.")
 

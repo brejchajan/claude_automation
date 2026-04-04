@@ -1,11 +1,15 @@
+from pathlib import Path
+import tempfile
 from typing import List, Optional
 import unittest
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from agents import detect_budget_depleted
 from config import default_pipeline_config, StageResult, Task
 from pipeline import build_stage_prompt, run_all_tasks, run_task, topological_sort
+from task_parser import discover_tasks  # used in TestDynamicTaskDiscovery
 
 
 def make_test_task(stages: Optional[List[str]] = None, **kwargs) -> Task:
@@ -344,6 +348,245 @@ class TestDependencyExecution(unittest.TestCase):
         self.assertEqual(results[1].status, "success")
         self.assertEqual(task_b.base_branch, "BDT-0001")
         self.assertEqual(mock_agent.call_count, 2)
+
+
+TASK_MD_TEMPLATE = """\
+---
+title: {title}
+project: /tmp/test_project
+branch: {branch}
+stages:
+  - planner
+budget_per_stage: 1.0
+priority: {priority}
+---
+Do the thing.
+"""
+
+LIMIT_HIT_STDERR = "Error: You have hit the limit for this billing period."
+
+
+def make_budget_depleted_result() -> StageResult:
+    return StageResult(
+        stage="",
+        success=True,
+        output="partial",
+        error=LIMIT_HIT_STDERR,
+        duration_seconds=1.0,
+        return_code=0,
+        budget_depleted=True,
+    )
+
+
+class TestDetectBudgetDepletedLimitPhrase(unittest.TestCase):
+    def test_you_have_hit_the_limit_in_stderr(self) -> None:
+        result = detect_budget_depleted("", "You have hit the limit for this billing period.", 0)
+        self.assertTrue(result)
+
+    def test_you_have_hit_the_limit_case_insensitive(self) -> None:
+        result = detect_budget_depleted("", "ERROR: YOU HAVE HIT THE LIMIT.", 0)
+        self.assertTrue(result)
+
+    def test_you_have_hit_the_limit_in_json_error_field(self) -> None:
+        stdout = '{"error": "You have hit the limit", "result": ""}'
+        result = detect_budget_depleted(stdout, "", 0)
+        self.assertTrue(result)
+
+    def test_normal_output_not_flagged(self) -> None:
+        result = detect_budget_depleted('{"result": "done"}', "", 0)
+        self.assertFalse(result)
+
+
+@patch("pipeline.cleanup_worktree")
+@patch("pipeline.get_diff", return_value="")
+@patch("pipeline.commit_worktree", return_value=True)
+@patch("pipeline.create_worktree", return_value=MagicMock())
+@patch("pipeline.run_agent")
+class TestPausedTaskBlocksPipeline(unittest.TestCase):
+    def setUp(self) -> None:
+        self.config = default_pipeline_config()
+
+    @patch("pipeline.time")
+    def test_second_task_waits_while_first_is_paused(
+        self,
+        mock_time: MagicMock,
+        mock_agent: MagicMock,
+        mock_create: MagicMock,
+        mock_commit: MagicMock,
+        mock_diff: MagicMock,
+        mock_cleanup: MagicMock,
+    ) -> None:
+        task_a = make_test_task(branch="auto/task-a", title="Task A", priority=1, stages=["planner"])
+        task_b = make_test_task(branch="auto/task-b", title="Task B", priority=2, stages=["planner"])
+
+        mock_time.monotonic.side_effect = [0.0, 0.0, 100.0]
+        mock_time.sleep = MagicMock()
+
+        execution_order: List[str] = []
+
+        def agent_side_effect(stage_cfg, prompt, working_dir, model, safety_prompt) -> StageResult:
+            if "auto/task-a" in prompt and not any("task-a paused" in e for e in execution_order):
+                execution_order.append("task-a paused")
+                return make_budget_depleted_result()
+            if "auto/task-a" in prompt:
+                execution_order.append("task-a resumed")
+                return make_success_result("", "done")
+            execution_order.append("task-b ran")
+            return make_success_result("", "done")
+
+        mock_agent.side_effect = agent_side_effect
+
+        results = run_all_tasks([task_a, task_b], self.config)
+
+        self.assertEqual(len(results), 2)
+        self.assertEqual(results[0].status, "success")
+        self.assertEqual(results[1].status, "success")
+        paused_idx = execution_order.index("task-a paused")
+        resumed_idx = execution_order.index("task-a resumed")
+        task_b_idx = execution_order.index("task-b ran")
+        self.assertLess(paused_idx, resumed_idx)
+        self.assertLess(resumed_idx, task_b_idx)
+
+    @patch("pipeline.time")
+    def test_second_task_not_started_until_first_resolves(
+        self,
+        mock_time: MagicMock,
+        mock_agent: MagicMock,
+        mock_create: MagicMock,
+        mock_commit: MagicMock,
+        mock_diff: MagicMock,
+        mock_cleanup: MagicMock,
+    ) -> None:
+        task_a = make_test_task(branch="auto/task-a", title="Task A", priority=1, stages=["planner"])
+        task_b = make_test_task(branch="auto/task-b", title="Task B", priority=2, stages=["planner"])
+
+        mock_time.monotonic.side_effect = [0.0, 0.0, 100.0]
+        mock_time.sleep = MagicMock()
+
+        task_a_call_count = {"n": 0}
+
+        def agent_side_effect(stage_cfg, prompt, working_dir, model, safety_prompt) -> StageResult:
+            if "auto/task-a" in prompt:
+                task_a_call_count["n"] += 1
+                if task_a_call_count["n"] == 1:
+                    return make_budget_depleted_result()
+            return make_success_result("", "done")
+
+        mock_agent.side_effect = agent_side_effect
+
+        results = run_all_tasks([task_a, task_b], self.config)
+
+        self.assertEqual(results[0].status, "success")
+        self.assertEqual(results[1].status, "success")
+        self.assertEqual(task_a_call_count["n"], 2)
+
+    @patch("pipeline.time")
+    def test_budget_exhausted_after_retry_window_still_blocks_next_task(
+        self,
+        mock_time: MagicMock,
+        mock_agent: MagicMock,
+        mock_create: MagicMock,
+        mock_commit: MagicMock,
+        mock_diff: MagicMock,
+        mock_cleanup: MagicMock,
+    ) -> None:
+        task_a = make_test_task(branch="auto/task-a", title="Task A", priority=1, stages=["planner"])
+        task_b = make_test_task(branch="auto/task-b", title="Task B", priority=2, stages=["planner"])
+
+        mock_agent.side_effect = [
+            make_budget_depleted_result(),
+            make_success_result("", "done"),
+        ]
+        mock_time.monotonic.side_effect = [0.0, 99999.0]
+        mock_time.sleep = MagicMock()
+
+        results = run_all_tasks([task_a, task_b], self.config)
+
+        self.assertEqual(results[0].status, "budget_exhausted")
+        self.assertEqual(results[1].status, "success")
+        self.assertEqual(mock_agent.call_count, 2)
+
+
+@patch("pipeline.cleanup_worktree")
+@patch("pipeline.get_diff", return_value="")
+@patch("pipeline.commit_worktree", return_value=True)
+@patch("pipeline.create_worktree", return_value=MagicMock())
+@patch("pipeline.run_agent")
+class TestDynamicTaskDiscovery(unittest.TestCase):
+    def setUp(self) -> None:
+        self.config = default_pipeline_config()
+
+    @patch("pipeline.time")
+    def test_new_task_file_added_during_pause_is_picked_up(
+        self,
+        mock_time: MagicMock,
+        mock_agent: MagicMock,
+        mock_create: MagicMock,
+        mock_commit: MagicMock,
+        mock_diff: MagicMock,
+        mock_cleanup: MagicMock,
+    ) -> None:
+        mock_time.monotonic.side_effect = [0.0, 0.0, 100.0]
+        mock_time.sleep = MagicMock()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tasks_dir = Path(tmpdir)
+            (tasks_dir / "task_a.md").write_text(
+                TASK_MD_TEMPLATE.format(title="Task A", branch="auto/task-a", priority=1)
+            )
+
+            new_task_written = {"done": False}
+
+            def agent_side_effect(stage_cfg, prompt, working_dir, model, safety_prompt) -> StageResult:
+                if "auto/task-a" in prompt and not new_task_written["done"]:
+                    (tasks_dir / "task_b.md").write_text(
+                        TASK_MD_TEMPLATE.format(title="Task B", branch="auto/task-b", priority=2)
+                    )
+                    new_task_written["done"] = True
+                    return make_budget_depleted_result()
+                return make_success_result("", "done")
+
+            mock_agent.side_effect = agent_side_effect
+
+            initial_tasks = discover_tasks(tasks_dir)
+            results = run_all_tasks(initial_tasks, self.config, tasks_dir=tasks_dir)
+
+            titles = [r.task.title for r in results]
+            self.assertIn("Task A", titles)
+            self.assertIn("Task B", titles)
+            self.assertEqual(len(results), 2)
+            self.assertEqual(results[0].status, "success")
+            self.assertEqual(results[1].status, "success")
+
+    @patch("pipeline.time")
+    def test_no_duplicate_tasks_when_dir_reloaded(
+        self,
+        mock_time: MagicMock,
+        mock_agent: MagicMock,
+        mock_create: MagicMock,
+        mock_commit: MagicMock,
+        mock_diff: MagicMock,
+        mock_cleanup: MagicMock,
+    ) -> None:
+        mock_time.monotonic.side_effect = [0.0, 0.0, 100.0]
+        mock_time.sleep = MagicMock()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tasks_dir = Path(tmpdir)
+            (tasks_dir / "task_a.md").write_text(
+                TASK_MD_TEMPLATE.format(title="Task A", branch="auto/task-a", priority=1)
+            )
+
+            mock_agent.side_effect = [
+                make_budget_depleted_result(),
+                make_success_result("", "done"),
+            ]
+
+            initial_tasks = discover_tasks(tasks_dir)
+            results = run_all_tasks(initial_tasks, self.config, tasks_dir=tasks_dir)
+
+            self.assertEqual(len(results), 1)
+            self.assertEqual(results[0].task.title, "Task A")
 
 
 if __name__ == "__main__":

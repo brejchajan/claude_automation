@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 
 from agents import run_agent
 from config import PipelineConfig, StageResult, Task, TaskResult
+from task_parser import discover_tasks
 from worktree import branch_exists, cleanup_worktree, commit_worktree, create_worktree, get_diff
 
 logger = logging.getLogger(__name__)
@@ -181,108 +182,168 @@ def topological_sort(tasks: List[Task]) -> List[Task]:
     return result
 
 
-def _retry_paused_tasks(
-    results: List[TaskResult],
+def _retry_paused_task(
+    paused_result: TaskResult,
     config: PipelineConfig,
     on_cycle_complete: Optional[Callable[[List[TaskResult]], None]],
-) -> None:
-    """Retry budget-paused tasks in-place within the configured retry window."""
+    all_results: List[TaskResult],
+    result_index: int,
+) -> TaskResult:
+    """Retry a single budget-paused task within the configured retry window.
+
+    Blocks until the task either succeeds, fails, or the retry window expires.
+
+    Returns:
+        TaskResult: The final result after retrying.
+    """
     start_time = time.monotonic()
 
     while True:
-        paused_indices = [i for i, r in enumerate(results) if r.status == "paused"]
-        if not paused_indices:
-            break
-
         time.sleep(config.retry_interval_minutes * 60)
 
         elapsed_hours = (time.monotonic() - start_time) / 3600.0
         if elapsed_hours >= config.retry_window_hours:
-            for i in paused_indices:
-                results[i] = TaskResult(
-                    task=results[i].task,
-                    stage_results=results[i].stage_results,
-                    status="budget_exhausted",
-                    branch_name=results[i].branch_name,
-                    paused_at_stage=results[i].paused_at_stage,
-                    accumulated_context=results[i].accumulated_context,
-                )
-            break
-
-        for i in paused_indices:
-            paused_result = results[i]
-            task = paused_result.task
-            wt_path = Path(task.project).parent / ".worktrees" / task.branch
-            logger.info(
-                "Retrying task '%s' from stage '%s'",
-                task.title,
-                paused_result.paused_at_stage,
+            logger.warning(
+                "Retry window exhausted for task '%s'",
+                paused_result.task.title,
             )
-            new_result = run_task(
-                task,
-                config,
-                resume_from=paused_result.paused_at_stage,
-                existing_context=paused_result.accumulated_context,
-                worktree_path=wt_path,
+            final = TaskResult(
+                task=paused_result.task,
+                stage_results=paused_result.stage_results,
+                status="budget_exhausted",
+                branch_name=paused_result.branch_name,
+                paused_at_stage=paused_result.paused_at_stage,
+                accumulated_context=paused_result.accumulated_context,
             )
-            results[i] = new_result
+            all_results[result_index] = final
+            if on_cycle_complete is not None:
+                on_cycle_complete(all_results)
+            return final
 
+        task = paused_result.task
+        wt_path = Path(task.project).parent / ".worktrees" / task.branch
+        logger.info(
+            "Retrying task '%s' from stage '%s'",
+            task.title,
+            paused_result.paused_at_stage,
+        )
+        new_result = run_task(
+            task,
+            config,
+            resume_from=paused_result.paused_at_stage,
+            existing_context=paused_result.accumulated_context,
+            worktree_path=wt_path,
+        )
+        all_results[result_index] = new_result
         if on_cycle_complete is not None:
-            on_cycle_complete(results)
+            on_cycle_complete(all_results)
+
+        if new_result.status != "paused":
+            return new_result
+
+        paused_result = new_result
+
+
+def _check_dependency(
+    task: Task,
+    branch_to_result: Dict[str, TaskResult],
+    results: List[TaskResult],
+) -> bool:
+    """Return True if the task's dependency is satisfied, recording a skip result if not.
+
+    Returns:
+        bool: True if the task may proceed, False if it was skipped.
+    """
+    if not task.depends_on:
+        return True
+
+    dep_result = branch_to_result.get(task.depends_on)
+    dep_satisfied = dep_result is not None and dep_result.status == "success"
+    if not dep_satisfied and dep_result is None:
+        dep_satisfied = branch_exists(Path(task.project), task.depends_on)
+
+    if not dep_satisfied:
+        logger.warning(
+            "Skipping task '%s' — dependency '%s' not met",
+            task.title,
+            task.depends_on,
+        )
+        skipped = TaskResult(
+            task=task,
+            stage_results=[],
+            status="skipped_dependency",
+            branch_name=task.branch,
+            paused_at_stage=None,
+            accumulated_context={},
+        )
+        results.append(skipped)
+        branch_to_result[task.branch] = skipped
+        return False
+
+    task.base_branch = task.depends_on
+    return True
 
 
 def run_all_tasks(
     tasks: List[Task],
     config: PipelineConfig,
     on_cycle_complete: Optional[Callable[[List[TaskResult]], None]] = None,
+    tasks_dir: Optional[Path] = None,
 ) -> List[TaskResult]:
     """Run all tasks respecting dependencies, retrying budget-paused tasks.
 
+    When a task is paused due to budget depletion, subsequent tasks are held
+    until the paused task finishes. If tasks_dir is provided, new task files
+    added to the directory are discovered and appended after each task completes.
+
     Args:
-        tasks: list of tasks to run.
+        tasks: initial list of tasks to run.
         config: pipeline configuration.
-        on_cycle_complete: optional callback invoked after each cycle with current results.
+        on_cycle_complete: optional callback invoked after each retry cycle with current results.
+        tasks_dir: optional path to the tasks directory for reloading new tasks at runtime.
 
     Returns:
-        List[TaskResult]: Results for every task in the same order as submitted.
+        List[TaskResult]: Results for every task processed, in execution order.
     """
-    sorted_tasks = topological_sort(tasks)
+    pending: List[Task] = list(tasks)
     results: List[TaskResult] = []
     branch_to_result: Dict[str, TaskResult] = {}
+    seen_branches: set = {t.branch for t in pending}
 
-    for task in sorted_tasks:
-        if task.depends_on:
-            dep_result = branch_to_result.get(task.depends_on)
-            dep_satisfied = dep_result is not None and dep_result.status == "success"
-            if not dep_satisfied and dep_result is None:
-                dep_satisfied = branch_exists(Path(task.project), task.depends_on)
-            if not dep_satisfied:
-                logger.warning(
-                    "Skipping task '%s' — dependency '%s' not met",
-                    task.title,
-                    task.depends_on,
-                )
-                result = TaskResult(
-                    task=task,
-                    stage_results=[],
-                    status="skipped_dependency",
-                    branch_name=task.branch,
-                    paused_at_stage=None,
-                    accumulated_context={},
-                )
-                results.append(result)
-                branch_to_result[task.branch] = result
+    def _load_new_tasks() -> None:
+        if tasks_dir is None:
+            return
+        for t in discover_tasks(tasks_dir):
+            if t.branch not in seen_branches:
+                pending.append(t)
+                seen_branches.add(t.branch)
+                logger.info("Discovered new task '%s' (branch=%s)", t.title, t.branch)
+
+    while pending:
+        sorted_pending = topological_sort(pending)
+        pending.clear()
+
+        for task in sorted_pending:
+            if not _check_dependency(task, branch_to_result, results):
                 continue
-            task.base_branch = task.depends_on
 
-        logger.info("Starting task '%s' (priority=%d)", task.title, task.priority)
-        result = run_task(task, config)
-        results.append(result)
-        branch_to_result[task.branch] = result
+            logger.info("Starting task '%s' (priority=%d)", task.title, task.priority)
+            result = run_task(task, config)
+            results.append(result)
+            branch_to_result[task.branch] = result
 
-    if on_cycle_complete is not None:
-        on_cycle_complete(results)
+            if result.status == "paused":
+                logger.info(
+                    "Task '%s' paused — holding pipeline until it resumes",
+                    task.title,
+                )
+                result_index = len(results) - 1
+                result = _retry_paused_task(result, config, on_cycle_complete, results, result_index)
+                branch_to_result[task.branch] = result
 
-    _retry_paused_tasks(results, config, on_cycle_complete)
+            _load_new_tasks()
+
+        if on_cycle_complete is not None:
+            on_cycle_complete(results)
 
     return results

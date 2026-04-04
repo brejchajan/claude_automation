@@ -54,7 +54,14 @@ def detect_budget_depleted(stdout: str, stderr: str, return_code: int) -> bool:
     Returns:
         bool: True if budget depletion is detected, False otherwise.
     """
-    budget_phrases = ["budget depleted", "budget exceeded", "budget limit", "rate limit", "you've hit your limit"]
+    budget_phrases = [
+        "budget depleted",
+        "budget exceeded",
+        "budget limit",
+        "rate limit",
+        "you've hit your limit",
+        "you have hit the limit",
+    ]
     combined = (stderr or "").lower()
     if any(phrase in combined for phrase in budget_phrases):
         return True
