@@ -79,6 +79,10 @@ What needs to be done.
 Additional project context.
 ```
 
+You can use the claude skill `create-task` (in .claude/skills/create-task/SKILL.md) to generate new task files 
+with the correct format. The usual workflow is to ask Claude to plan a new feature (epic), and then 
+let it break the plan down into tasks using `create-task` skill.
+
 ### Available stages
 
 | Stage | What it does |
