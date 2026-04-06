@@ -10,7 +10,7 @@ human review.
 ```bash
 conda create -n claude_pipeline python=3.12 -y
 conda activate claude_pipeline
-pip install -r requirements.txt
+pip install -e .
 ```
 
 Requires the `claude` CLI to be available in your shell (sourced via `~/.bashrc`).
@@ -22,13 +22,13 @@ Requires the `claude` CLI to be available in your shell (sourced via `~/.bashrc`
 Process all task files in `tasks/`:
 
 ```bash
-python main.py --now
+claude-automation --now
 ```
 
 Run a single task:
 
 ```bash
-python main.py --task tasks/my_task.md
+claude-automation --task tasks/my_task.md
 ```
 
 ### Scheduled execution
@@ -36,14 +36,18 @@ python main.py --task tasks/my_task.md
 Start the scheduler (default: 2 AM daily):
 
 ```bash
-python main.py
+claude-automation
 ```
 
-Override the schedule:
+Override the schedule with a standard cron expression (`minute hour day month weekday`):
 
 ```bash
-python main.py --cron "0 3 * * *"
+claude-automation --cron "0 3 * * *"   # run at 3 AM daily
+claude-automation --cron "0 2 * * 1"   # run at 2 AM every Monday
 ```
+
+The scheduler blocks the terminal and triggers the pipeline on each matching time.
+To run it as a background service, wrap it in a system cron job or a process manager such as `systemd` or `supervisor`.
 
 ## Task file format
 
@@ -151,6 +155,7 @@ claude_automation/
 
 ```bash
 conda activate claude_pipeline
+pip install -e ".[dev]"
 pytest tests/ -v
 ```
 

@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=70"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "claude-automation"
+version = "0.1.0"
+description = "Autonomous pipeline for running Claude Code agents overnight"
+requires-python = ">=3.12"
+dependencies = [
+    "apscheduler>=3.10",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.14.11",
+]
+
+[project.scripts]
+claude-automation = "main:main"
+
+[tool.setuptools]
+py-modules = [
+    "agents",
+    "config",
+    "hello_claude",
+    "main",
+    "pipeline",
+    "reporting",
+    "task_parser",
+    "worktree",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
