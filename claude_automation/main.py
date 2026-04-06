@@ -60,11 +60,19 @@ def run_pipeline(config: PipelineConfig, task_file: Optional[str] = None) -> Non
     def _on_cycle_complete(results: List[TaskResult]) -> None:
         timestamp = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d_%H%M%S")
         report_path = generate_report(results, timestamp, logs_dir)
-        move_completed_tasks(results, tasks_done_dir, logger)
         logger.info("Cycle report: %s", report_path)
 
+    def _on_task_complete(result: TaskResult) -> None:
+        move_completed_tasks([result], tasks_done_dir, logger)
+
     tasks_dir_path = None if task_file is not None else Path(config.tasks_dir)
-    run_all_tasks(tasks, config, on_cycle_complete=_on_cycle_complete, tasks_dir=tasks_dir_path)
+    run_all_tasks(
+        tasks,
+        config,
+        on_cycle_complete=_on_cycle_complete,
+        on_task_complete=_on_task_complete,
+        tasks_dir=tasks_dir_path,
+    )
 
     logger.info("Pipeline complete.")
 

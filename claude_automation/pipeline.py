@@ -288,6 +288,7 @@ def run_all_tasks(
     tasks: List[Task],
     config: PipelineConfig,
     on_cycle_complete: Optional[Callable[[List[TaskResult]], None]] = None,
+    on_task_complete: Optional[Callable[[TaskResult], None]] = None,
     tasks_dir: Optional[Path] = None,
 ) -> List[TaskResult]:
     """Run all tasks respecting dependencies, retrying budget-paused tasks.
@@ -300,6 +301,7 @@ def run_all_tasks(
         tasks: initial list of tasks to run.
         config: pipeline configuration.
         on_cycle_complete: optional callback invoked after each retry cycle with current results.
+        on_task_complete: optional callback invoked immediately after each task finishes.
         tasks_dir: optional path to the tasks directory for reloading new tasks at runtime.
 
     Returns:
@@ -340,6 +342,9 @@ def run_all_tasks(
                 result_index = len(results) - 1
                 result = _retry_paused_task(result, config, on_cycle_complete, results, result_index)
                 branch_to_result[task.branch] = result
+
+            if on_task_complete is not None:
+                on_task_complete(result)
 
             _load_new_tasks()
 
