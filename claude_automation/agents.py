@@ -5,7 +5,7 @@ import subprocess  # noqa: S404
 import time
 from typing import List
 
-from config import StageConfig, StageResult
+from .config import StageConfig, StageResult
 
 
 def build_command(

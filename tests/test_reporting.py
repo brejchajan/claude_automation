@@ -2,8 +2,8 @@ import json
 from pathlib import Path
 from typing import List
 
-from config import StageResult, Task, TaskResult
-from reporting import generate_report, slugify_title
+from claude_automation.config import StageResult, Task, TaskResult
+from claude_automation.reporting import generate_report, slugify_title
 
 
 def make_task_result(

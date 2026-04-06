@@ -3,7 +3,7 @@ from pathlib import Path
 import re
 from typing import List
 
-from config import TaskResult
+from .config import TaskResult
 
 
 def slugify_title(title: str) -> str:

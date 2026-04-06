@@ -3,7 +3,7 @@ import subprocess
 
 import pytest
 
-from worktree import cleanup_worktree, commit_worktree, create_worktree, get_diff
+from claude_automation.worktree import cleanup_worktree, commit_worktree, create_worktree, get_diff
 
 
 @pytest.fixture

@@ -3,7 +3,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from config import default_pipeline_config, DEFAULT_SAFETY_PROMPT, StageConfig, VALID_STAGES
+from claude_automation.config import default_pipeline_config, DEFAULT_SAFETY_PROMPT, StageConfig, VALID_STAGES
 
 
 def test_default_pipeline_config_has_all_stages():

@@ -9,11 +9,11 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from config import default_pipeline_config, StageResult, Task, TaskResult
-from main import move_completed_tasks
-from pipeline import run_all_tasks
-from reporting import generate_report
-from task_parser import discover_tasks
+from claude_automation.config import default_pipeline_config, StageResult, Task, TaskResult
+from claude_automation.main import move_completed_tasks
+from claude_automation.pipeline import run_all_tasks
+from claude_automation.reporting import generate_report
+from claude_automation.task_parser import discover_tasks
 
 
 @pytest.fixture
@@ -75,11 +75,11 @@ def _make_task_md(
     return "\n".join(lines) + "\n"
 
 
-@patch("pipeline.cleanup_worktree")
-@patch("pipeline.get_diff", return_value="")
-@patch("pipeline.commit_worktree", return_value=True)
-@patch("pipeline.create_worktree")
-@patch("pipeline.run_agent")
+@patch("claude_automation.pipeline.cleanup_worktree")
+@patch("claude_automation.pipeline.get_diff", return_value="")
+@patch("claude_automation.pipeline.commit_worktree", return_value=True)
+@patch("claude_automation.pipeline.create_worktree")
+@patch("claude_automation.pipeline.run_agent")
 def test_end_to_end_with_mocked_claude(
     mock_agent: MagicMock,
     mock_create: MagicMock,
@@ -121,11 +121,11 @@ def test_end_to_end_with_mocked_claude(
     assert "Auth Feature" in content
 
 
-@patch("pipeline.cleanup_worktree")
-@patch("pipeline.get_diff", return_value="")
-@patch("pipeline.commit_worktree", return_value=True)
-@patch("pipeline.create_worktree")
-@patch("pipeline.run_agent")
+@patch("claude_automation.pipeline.cleanup_worktree")
+@patch("claude_automation.pipeline.get_diff", return_value="")
+@patch("claude_automation.pipeline.commit_worktree", return_value=True)
+@patch("claude_automation.pipeline.create_worktree")
+@patch("claude_automation.pipeline.run_agent")
 def test_end_to_end_custom_stages(
     mock_agent: MagicMock,
     mock_create: MagicMock,
@@ -154,12 +154,12 @@ def test_end_to_end_custom_stages(
     assert mock_agent.call_count == 1
 
 
-@patch("pipeline.cleanup_worktree")
-@patch("pipeline.get_diff", return_value="")
-@patch("pipeline.commit_worktree", return_value=True)
-@patch("pipeline.create_worktree")
-@patch("pipeline.run_agent")
-@patch("pipeline.time")
+@patch("claude_automation.pipeline.cleanup_worktree")
+@patch("claude_automation.pipeline.get_diff", return_value="")
+@patch("claude_automation.pipeline.commit_worktree", return_value=True)
+@patch("claude_automation.pipeline.create_worktree")
+@patch("claude_automation.pipeline.run_agent")
+@patch("claude_automation.pipeline.time")
 def test_end_to_end_retry_on_budget(
     mock_time: MagicMock,
     mock_agent: MagicMock,
@@ -198,11 +198,11 @@ def test_end_to_end_retry_on_budget(
     assert mock_agent.call_count == 2
 
 
-@patch("pipeline.cleanup_worktree")
-@patch("pipeline.get_diff", return_value="")
-@patch("pipeline.commit_worktree", return_value=True)
-@patch("pipeline.create_worktree")
-@patch("pipeline.run_agent")
+@patch("claude_automation.pipeline.cleanup_worktree")
+@patch("claude_automation.pipeline.get_diff", return_value="")
+@patch("claude_automation.pipeline.commit_worktree", return_value=True)
+@patch("claude_automation.pipeline.create_worktree")
+@patch("claude_automation.pipeline.run_agent")
 def test_task_discovery_and_pipeline(
     mock_agent: MagicMock,
     mock_create: MagicMock,

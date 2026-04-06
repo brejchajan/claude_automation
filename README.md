@@ -17,6 +17,9 @@ Requires the `claude` CLI to be available in your shell (sourced via `~/.bashrc`
 
 ## Usage
 
+Run all commands from the root of the project you want to automate. Tasks, logs,
+and completed task archives are stored relative to the current directory.
+
 ### Run immediately
 
 Process all task files in `tasks/`:

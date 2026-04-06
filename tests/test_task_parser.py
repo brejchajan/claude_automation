@@ -5,7 +5,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from task_parser import discover_tasks, parse_task, slugify
+from claude_automation.task_parser import discover_tasks, parse_task, slugify
 
 
 def test_parse_task_full_frontmatter(tmp_path):

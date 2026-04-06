@@ -9,10 +9,10 @@ from typing import Dict, List, Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     from typing import Callable
 
-from agents import run_agent
-from config import PipelineConfig, StageResult, Task, TaskResult
-from task_parser import discover_tasks
-from worktree import branch_exists, cleanup_worktree, commit_worktree, create_worktree, get_diff
+from .agents import run_agent
+from .config import PipelineConfig, StageResult, Task, TaskResult
+from .task_parser import discover_tasks
+from .worktree import branch_exists, cleanup_worktree, commit_worktree, create_worktree, get_diff
 
 logger = logging.getLogger(__name__)
 

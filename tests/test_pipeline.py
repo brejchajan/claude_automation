@@ -6,10 +6,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agents import detect_budget_depleted
-from config import default_pipeline_config, StageResult, Task
-from pipeline import build_stage_prompt, run_all_tasks, run_task, topological_sort
-from task_parser import discover_tasks  # used in TestDynamicTaskDiscovery
+from claude_automation.agents import detect_budget_depleted
+from claude_automation.config import default_pipeline_config, StageResult, Task
+from claude_automation.pipeline import build_stage_prompt, run_all_tasks, run_task, topological_sort
+from claude_automation.task_parser import discover_tasks  # used in TestDynamicTaskDiscovery
 
 
 def make_test_task(stages: Optional[List[str]] = None, **kwargs) -> Task:
@@ -62,11 +62,11 @@ class TestBuildStagePrompt(unittest.TestCase):
         self.assertIn("### planner Output", prompt)
 
 
-@patch("pipeline.cleanup_worktree")
-@patch("pipeline.get_diff", return_value="")
-@patch("pipeline.commit_worktree", return_value=True)
-@patch("pipeline.create_worktree", return_value=MagicMock())
-@patch("pipeline.run_agent")
+@patch("claude_automation.pipeline.cleanup_worktree")
+@patch("claude_automation.pipeline.get_diff", return_value="")
+@patch("claude_automation.pipeline.commit_worktree", return_value=True)
+@patch("claude_automation.pipeline.create_worktree", return_value=MagicMock())
+@patch("claude_automation.pipeline.run_agent")
 class TestRunTask(unittest.TestCase):
     def setUp(self) -> None:
         self.config = default_pipeline_config()
@@ -175,11 +175,11 @@ class TestRunTask(unittest.TestCase):
         self.assertIn("planner output text", coder_prompt)
 
 
-@patch("pipeline.cleanup_worktree")
-@patch("pipeline.get_diff", return_value="")
-@patch("pipeline.commit_worktree", return_value=True)
-@patch("pipeline.create_worktree", return_value=MagicMock())
-@patch("pipeline.run_agent")
+@patch("claude_automation.pipeline.cleanup_worktree")
+@patch("claude_automation.pipeline.get_diff", return_value="")
+@patch("claude_automation.pipeline.commit_worktree", return_value=True)
+@patch("claude_automation.pipeline.create_worktree", return_value=MagicMock())
+@patch("claude_automation.pipeline.run_agent")
 class TestRunAllTasks(unittest.TestCase):
     def setUp(self) -> None:
         self.config = default_pipeline_config()
@@ -217,7 +217,7 @@ class TestRunAllTasks(unittest.TestCase):
         self.assertEqual(len(callback_results), 1)
         self.assertEqual(callback_results[0].status, "success")
 
-    @patch("pipeline.time")
+    @patch("claude_automation.pipeline.time")
     def test_run_all_tasks_retry_on_budget(
         self,
         mock_time: MagicMock,
@@ -246,7 +246,7 @@ class TestRunAllTasks(unittest.TestCase):
         self.assertEqual(results[0].status, "success")
         mock_time.sleep.assert_called()
 
-    @patch("pipeline.time")
+    @patch("claude_automation.pipeline.time")
     def test_run_all_tasks_callback_on_retry(
         self,
         mock_time: MagicMock,
@@ -298,11 +298,11 @@ class TestTopologicalSort(unittest.TestCase):
         self.assertEqual(result[1].branch, "A")
 
 
-@patch("pipeline.cleanup_worktree")
-@patch("pipeline.get_diff", return_value="")
-@patch("pipeline.commit_worktree", return_value=True)
-@patch("pipeline.create_worktree", return_value=MagicMock())
-@patch("pipeline.run_agent")
+@patch("claude_automation.pipeline.cleanup_worktree")
+@patch("claude_automation.pipeline.get_diff", return_value="")
+@patch("claude_automation.pipeline.commit_worktree", return_value=True)
+@patch("claude_automation.pipeline.create_worktree", return_value=MagicMock())
+@patch("claude_automation.pipeline.run_agent")
 class TestDependencyExecution(unittest.TestCase):
     def setUp(self) -> None:
         self.config = default_pipeline_config()
@@ -397,16 +397,16 @@ class TestDetectBudgetDepletedLimitPhrase(unittest.TestCase):
         self.assertFalse(result)
 
 
-@patch("pipeline.cleanup_worktree")
-@patch("pipeline.get_diff", return_value="")
-@patch("pipeline.commit_worktree", return_value=True)
-@patch("pipeline.create_worktree", return_value=MagicMock())
-@patch("pipeline.run_agent")
+@patch("claude_automation.pipeline.cleanup_worktree")
+@patch("claude_automation.pipeline.get_diff", return_value="")
+@patch("claude_automation.pipeline.commit_worktree", return_value=True)
+@patch("claude_automation.pipeline.create_worktree", return_value=MagicMock())
+@patch("claude_automation.pipeline.run_agent")
 class TestPausedTaskBlocksPipeline(unittest.TestCase):
     def setUp(self) -> None:
         self.config = default_pipeline_config()
 
-    @patch("pipeline.time")
+    @patch("claude_automation.pipeline.time")
     def test_second_task_waits_while_first_is_paused(
         self,
         mock_time: MagicMock,
@@ -447,7 +447,7 @@ class TestPausedTaskBlocksPipeline(unittest.TestCase):
         self.assertLess(paused_idx, resumed_idx)
         self.assertLess(resumed_idx, task_b_idx)
 
-    @patch("pipeline.time")
+    @patch("claude_automation.pipeline.time")
     def test_second_task_not_started_until_first_resolves(
         self,
         mock_time: MagicMock,
@@ -480,7 +480,7 @@ class TestPausedTaskBlocksPipeline(unittest.TestCase):
         self.assertEqual(results[1].status, "success")
         self.assertEqual(task_a_call_count["n"], 2)
 
-    @patch("pipeline.time")
+    @patch("claude_automation.pipeline.time")
     def test_budget_exhausted_after_retry_window_still_blocks_next_task(
         self,
         mock_time: MagicMock,
@@ -507,16 +507,16 @@ class TestPausedTaskBlocksPipeline(unittest.TestCase):
         self.assertEqual(mock_agent.call_count, 2)
 
 
-@patch("pipeline.cleanup_worktree")
-@patch("pipeline.get_diff", return_value="")
-@patch("pipeline.commit_worktree", return_value=True)
-@patch("pipeline.create_worktree", return_value=MagicMock())
-@patch("pipeline.run_agent")
+@patch("claude_automation.pipeline.cleanup_worktree")
+@patch("claude_automation.pipeline.get_diff", return_value="")
+@patch("claude_automation.pipeline.commit_worktree", return_value=True)
+@patch("claude_automation.pipeline.create_worktree", return_value=MagicMock())
+@patch("claude_automation.pipeline.run_agent")
 class TestDynamicTaskDiscovery(unittest.TestCase):
     def setUp(self) -> None:
         self.config = default_pipeline_config()
 
-    @patch("pipeline.time")
+    @patch("claude_automation.pipeline.time")
     def test_new_task_file_added_during_pause_is_picked_up(
         self,
         mock_time: MagicMock,
@@ -558,7 +558,7 @@ class TestDynamicTaskDiscovery(unittest.TestCase):
             self.assertEqual(results[0].status, "success")
             self.assertEqual(results[1].status, "success")
 
-    @patch("pipeline.time")
+    @patch("claude_automation.pipeline.time")
     def test_no_duplicate_tasks_when_dir_reloaded(
         self,
         mock_time: MagicMock,

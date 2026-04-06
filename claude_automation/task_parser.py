@@ -4,7 +4,7 @@ from typing import List
 
 import yaml
 
-from config import Task, VALID_STAGES
+from .config import Task, VALID_STAGES
 
 FRONTMATTER_PARTS = 3
 

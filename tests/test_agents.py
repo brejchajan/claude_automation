@@ -5,8 +5,8 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from agents import build_command, detect_budget_depleted, parse_output, run_agent
-from config import default_pipeline_config, StageConfig
+from claude_automation.agents import build_command, detect_budget_depleted, parse_output, run_agent
+from claude_automation.config import default_pipeline_config, StageConfig
 
 
 def _planner_config() -> StageConfig:
@@ -92,7 +92,7 @@ def test_detect_budget_depleted_rate_limit():
     assert detect_budget_depleted("", "rate limit reached", 1) is True
 
 
-@patch("agents.subprocess.run")
+@patch("claude_automation.agents.subprocess.run")
 def test_run_agent_success(mock_run):
     mock_run.return_value = MagicMock(
         stdout='{"result": "all done"}',
@@ -107,7 +107,7 @@ def test_run_agent_success(mock_run):
     assert result.budget_depleted is False
 
 
-@patch("agents.subprocess.run")
+@patch("claude_automation.agents.subprocess.run")
 def test_run_agent_failure(mock_run):
     mock_run.return_value = MagicMock(
         stdout="",
@@ -120,7 +120,7 @@ def test_run_agent_failure(mock_run):
     assert result.return_code == 1
 
 
-@patch("agents.subprocess.run")
+@patch("claude_automation.agents.subprocess.run")
 def test_run_agent_timeout(mock_run):
     mock_run.side_effect = subprocess.TimeoutExpired(cmd="test", timeout=10)
     cfg = _coder_config()
@@ -129,7 +129,7 @@ def test_run_agent_timeout(mock_run):
     assert result.error == "timeout"
 
 
-@patch("agents.subprocess.run")
+@patch("claude_automation.agents.subprocess.run")
 def test_run_agent_budget_depleted(mock_run):
     mock_run.return_value = MagicMock(
         stdout='{"error": "budget limit reached"}',
