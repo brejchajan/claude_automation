@@ -6,7 +6,10 @@ review, test) in isolated git worktrees. Each task produces a feature branch for
 human review.
 
 ## Setup
+You can install simply with pip:
+`pip install claude-automation`
 
+Or you can clone this repository and install manually (editable mode is recommended for development):
 ```bash
 conda create -n claude_automation python=3.12 -y
 conda activate claude_automation
