@@ -8,14 +8,47 @@ human review.
 ## Setup
 
 ```bash
-conda create -n claude_pipeline python=3.12 -y
-conda activate claude_pipeline
+conda create -n claude_automation python=3.12 -y
+conda activate claude_automation
 pip install -e .
 ```
 
-Requires the `claude` CLI to be available in your shell (sourced via `~/.bashrc`).
+Requires the `claude` CLI to be available on `PATH`.
 
-## Usage
+### Platform requirements
+
+The pipeline shells out to `bash` to invoke the `claude` CLI, so a POSIX-style
+bash shell is required on every platform:
+
+- **macOS / Linux**: uses the system `bash` (no extra setup needed).
+- **Windows**: requires **Git Bash** (bundled with [Git for Windows](https://git-scm.com/download/win)).
+  WSL's `bash.exe` is **not** supported — it uses `/mnt/c/...` mount points
+  instead of `/c/...`, which is incompatible with the paths the pipeline
+  generates. The pipeline auto-detects Git Bash at the standard install
+  locations (`C:\Program Files\Git\bin\bash.exe` or
+  `C:\Program Files\Git\usr\bin\bash.exe`) and prefers it over any other
+  `bash` on `PATH`.
+
+## Quickstart
+
+Create a new project repository (claude-automation uses git worktrees, so the target repo must be a 
+git repository with at least one commit):
+
+```bash 
+mkdir my_project
+cd my_project
+git init
+git commit --allow-empty -m "Initial commit"
+```
+
+Create a new task file (possibly using the `create-task` skill) in `tasks/my_task.md` with the required frontmatter 
+fields (`title` and `project` at minimum). You can also start with the example task file 
+`tasks/CALC-0001.md` included in this repo, which implements a command line calculator in python.
+Please check that the paths in the task are correct.
+
+```commandline
+cp ../claude_automation/tasks/CALC-0001.md tasks/my_task.md
+```
 
 Run all commands from the root of the project you want to automate. Tasks, logs,
 and completed task archives are stored relative to the current directory.
@@ -161,7 +194,7 @@ claude_automation/
 ## Tests
 
 ```bash
-conda activate claude_pipeline
+conda activate claude_automation
 pip install -e ".[dev]"
 pytest tests/ -v
 ```
@@ -174,7 +207,7 @@ Claude Code 5-hour inactivity timer. This is intended to be scheduled as a
 alive:
 
 ```cron
-0 */4 * * * /opt/anaconda3/envs/claude_pipeline/bin/python /Users/janbrejcha/devel/claude_automation/hello_claude.py
+0 */4 * * * /opt/anaconda3/envs/claude_pipeline/bin/python <path-to>/claude_automation/hello_claude.py
 ```
 
 This is independent from the pipeline and has no effect on task execution.

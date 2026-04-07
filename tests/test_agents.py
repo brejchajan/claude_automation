@@ -24,43 +24,63 @@ MODEL = "claude-test-model"
 WORK_DIR = Path("/tmp/worktree")
 
 
+def _read_script(temp_files):
+    script_path = next(f for f in temp_files if f.endswith(".sh"))
+    return Path(script_path).read_text(encoding="utf-8")
+
+
+def _cleanup(temp_files):
+    for f in temp_files:
+        try:
+            Path(f).unlink()
+        except OSError:
+            pass
+
+
 def test_build_command_planner():
     cfg = _planner_config()
-    cmd = build_command(cfg, "plan this", MODEL, SAFETY, WORK_DIR)
-    assert cmd[0] == "bash"
-    assert cmd[1] == "-c"
-    bash_str = cmd[2]
-    assert "--permission-mode plan" in bash_str
-    assert cfg.allowed_tools in bash_str
+    cmd, temp_files = build_command(cfg, "plan this", MODEL, SAFETY, WORK_DIR)
+    try:
+        assert isinstance(cmd, str)
+        assert "bash" in cmd
+        script = _read_script(temp_files)
+        assert "--permission-mode plan" in script
+        assert cfg.allowed_tools in script
+    finally:
+        _cleanup(temp_files)
 
 
 def test_build_command_includes_cd():
     cfg = _planner_config()
-    cmd = build_command(cfg, "plan this", MODEL, SAFETY, WORK_DIR)
-    bash_str = cmd[2]
-    assert "cd /tmp/worktree" in bash_str
+    cmd, temp_files = build_command(cfg, "plan this", MODEL, SAFETY, WORK_DIR)
+    try:
+        script = _read_script(temp_files)
+        assert "cd " in script
+        assert "worktree" in script
+    finally:
+        _cleanup(temp_files)
 
 
 def test_build_command_coder():
     cfg = _coder_config()
-    cmd = build_command(cfg, "code this", MODEL, SAFETY, WORK_DIR)
-    bash_str = cmd[2]
-    assert "--permission-mode acceptEdits" in bash_str
-    assert cfg.allowed_tools in bash_str
+    cmd, temp_files = build_command(cfg, "code this", MODEL, SAFETY, WORK_DIR)
+    try:
+        script = _read_script(temp_files)
+        assert "--permission-mode acceptEdits" in script
+        assert cfg.allowed_tools in script
+    finally:
+        _cleanup(temp_files)
 
 
-def test_build_command_escapes_quotes():
+def test_build_command_writes_prompt_to_temp_file():
     cfg = _planner_config()
-    prompt = "it's a test with 'quotes'"
-    cmd = build_command(cfg, prompt, MODEL, SAFETY, WORK_DIR)
-    bash_str = cmd[2]
-    assert "'" not in bash_str.split("claude -p ")[1].split(" --allowedTools")[0].replace("'\"'\"'", "") or True
-    result = subprocess.run(
-        ["bash", "-c", f"echo {bash_str.split('claude -p ')[1].split(' --')[0]}"],
-        capture_output=True,
-        text=True,
-    )
-    assert result.stdout.strip() == prompt
+    prompt = "it's a test with 'quotes' and $(dangerous) chars"
+    cmd, temp_files = build_command(cfg, prompt, MODEL, SAFETY, WORK_DIR)
+    try:
+        prompt_file = next(f for f in temp_files if "prompt" in f)
+        assert Path(prompt_file).read_text(encoding="utf-8") == prompt
+    finally:
+        _cleanup(temp_files)
 
 
 def test_parse_output_valid_json():
