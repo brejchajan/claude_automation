@@ -12,6 +12,46 @@ from typing import List, Tuple
 from .config import StageConfig, StageResult
 
 
+def _extract_session_id(stdout: str) -> str:
+    """Extract the session ID from the stream-json init event in the CLI stdout.
+
+    Returns:
+        str: The session_id from the first system/init event, or empty string if not found.
+    """
+    for line in stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            data = json.loads(line)
+            if data.get("type") == "system" and data.get("subtype") == "init":
+                session_id = data.get("session_id", "")
+                if isinstance(session_id, str):
+                    return session_id
+        except (json.JSONDecodeError, AttributeError):
+            continue
+    return ""
+
+
+def _set_session_title(session_id: str, title: str) -> None:
+    """Append a custom-title entry to the session's jsonl file so it appears in /resume.
+
+    Writing --name on the CLI inserts the custom-title as the first line of the file,
+    which causes the /resume picker to skip the session. Appending it at the end
+    preserves resumability and still sets a display name.
+    """
+    if not session_id or not title:
+        return
+    projects_dir = Path.home() / ".claude" / "projects"
+    if not projects_dir.exists():
+        return
+    for session_file in projects_dir.rglob(f"{session_id}.jsonl"):
+        entry = {"type": "custom-title", "customTitle": title, "sessionId": session_id}
+        with session_file.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(entry) + "\n")
+        return
+
+
 def _to_posix_path(path: Path) -> str:
     """Return a POSIX-style path string, converting Windows drive letters to /drive/... form."""
     posix = path.as_posix()
@@ -99,10 +139,10 @@ def build_command(
             'claude -p "$PROMPT"'
             f" --allowedTools {shlex.quote(stage_config.allowed_tools)}"
             f" --permission-mode {stage_config.permission_mode}"
-            " --output-format json"
+            " --output-format stream-json --verbose"
             f" --max-budget-usd {stage_config.budget_usd}"
             f" --model {shlex.quote(model)}"
-            ' --append-system-prompt "$SAFETY"' + (f" --name {shlex.quote(session_name)}" if session_name else "")
+            ' --append-system-prompt "$SAFETY"'
         ),
     ]
     script_content = "\n".join(script_lines) + "\n"
@@ -120,11 +160,25 @@ def build_command(
 def parse_output(stdout: str) -> str:
     """Parse JSON stdout from the claude CLI and return the result field.
 
+    Handles both single-object JSON (--output-format json) and newline-delimited
+    stream-json (--output-format stream-json), where the result is on the line
+    with "type":"result".
+
     Returns:
         str: Parsed result string, or raw stdout if JSON parsing fails.
     """
     if not stdout:
         return ""
+    for line in reversed(stdout.splitlines()):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            data = json.loads(line)
+            if data.get("type") == "result":
+                return data.get("result", "")
+        except (json.JSONDecodeError, AttributeError):
+            continue
     try:
         data = json.loads(stdout)
         return data.get("result", "")
@@ -149,17 +203,21 @@ def detect_budget_depleted(stdout: str, stderr: str, return_code: int) -> bool:
     combined = (stderr or "").lower()
     if any(phrase in combined for phrase in budget_phrases):
         return True
-    try:
-        data = json.loads(stdout or "")
-        error_field = str(data.get("error", "")).lower()
-        if any(phrase in error_field for phrase in budget_phrases):
-            return True
-        if data.get("stop_reason", "") == "stop_sequence":
-            result_field = str(data.get("result", "")).lower()
-            if any(phrase in result_field for phrase in budget_phrases):
+    for line in (stdout or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            data = json.loads(line)
+            error_field = str(data.get("error", "")).lower()
+            if any(phrase in error_field for phrase in budget_phrases):
                 return True
-    except (json.JSONDecodeError, AttributeError):
-        pass
+            if data.get("stop_reason", "") == "stop_sequence":
+                result_field = str(data.get("result", "")).lower()
+                if any(phrase in result_field for phrase in budget_phrases):
+                    return True
+        except (json.JSONDecodeError, AttributeError):
+            continue
     return False
 
 
@@ -201,6 +259,9 @@ def run_agent(
                 budget_depleted=False,
             )
         duration = time.monotonic() - start
+        if session_name:
+            session_id = _extract_session_id(result.stdout)
+            _set_session_title(session_id, session_name)
         output = parse_output(result.stdout)
         budget_depleted = detect_budget_depleted(result.stdout, result.stderr, result.returncode)
         return StageResult(
