@@ -424,7 +424,7 @@ class TestPausedTaskBlocksPipeline(unittest.TestCase):
 
         execution_order: List[str] = []
 
-        def agent_side_effect(stage_cfg, prompt, working_dir, model, safety_prompt) -> StageResult:
+        def agent_side_effect(stage_cfg, prompt, working_dir, model, safety_prompt, session_name="") -> StageResult:
             if "auto/task-a" in prompt and not any("task-a paused" in e for e in execution_order):
                 execution_order.append("task-a paused")
                 return make_budget_depleted_result()
@@ -465,7 +465,7 @@ class TestPausedTaskBlocksPipeline(unittest.TestCase):
 
         task_a_call_count = {"n": 0}
 
-        def agent_side_effect(stage_cfg, prompt, working_dir, model, safety_prompt) -> StageResult:
+        def agent_side_effect(stage_cfg, prompt, working_dir, model, safety_prompt, session_name="") -> StageResult:
             if "auto/task-a" in prompt:
                 task_a_call_count["n"] += 1
                 if task_a_call_count["n"] == 1:
@@ -537,7 +537,7 @@ class TestDynamicTaskDiscovery(unittest.TestCase):
 
             new_task_written = {"done": False}
 
-            def agent_side_effect(stage_cfg, prompt, working_dir, model, safety_prompt) -> StageResult:
+            def agent_side_effect(stage_cfg, prompt, working_dir, model, safety_prompt, session_name="") -> StageResult:
                 if "auto/task-a" in prompt and not new_task_written["done"]:
                     (tasks_dir / "task_b.md").write_text(
                         TASK_MD_TEMPLATE.format(title="Task B", branch="auto/task-b", priority=2)

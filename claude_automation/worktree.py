@@ -1,6 +1,29 @@
 from pathlib import Path
+import re
 import subprocess  # noqa: S404
+import sys
 from typing import Optional
+
+
+def normalize_path(path: Path) -> Path:
+    """Resolve a path that may use POSIX-style /drive/... or /Users/... form on Windows.
+
+    On Windows, paths like /Users/foo/bar or /c/Users/foo/bar (from Git Bash / MSYS2)
+    are not valid Windows paths. This function converts them to proper Windows paths.
+
+    Returns:
+        Path: Resolved absolute Windows path on win32, unchanged on other platforms.
+    """
+    if sys.platform != "win32":
+        return path
+    posix = path.as_posix()
+    drive_match = re.match(r"^/([a-zA-Z])/(.*)$", posix)
+    if drive_match:
+        return Path(f"{drive_match.group(1).upper()}:/{drive_match.group(2)}")
+    users_match = re.match(r"^/Users/[^/]+/(.*)$", posix, re.IGNORECASE)
+    if users_match:
+        return Path.home() / users_match.group(1)
+    return path
 
 
 def branch_exists(repo_path: Path, branch_name: str) -> bool:
@@ -9,6 +32,7 @@ def branch_exists(repo_path: Path, branch_name: str) -> bool:
     Returns:
         bool: True if the branch exists, False otherwise.
     """
+    repo_path = normalize_path(repo_path)
     result = subprocess.run(  # noqa: S603
         ["git", "-C", str(repo_path), "rev-parse", "--verify", branch_name],
         capture_output=True,
@@ -44,6 +68,7 @@ def create_worktree(repo_path: Path, branch_name: str, base_branch: Optional[str
     Raises:
         RuntimeError: If the git worktree add command fails.
     """
+    repo_path = normalize_path(repo_path)
     if base_branch is None:
         base_branch = detect_default_branch(repo_path)
     worktree_path = repo_path.parent / ".worktrees" / branch_name
@@ -79,6 +104,7 @@ def cleanup_worktree(repo_path: Path, worktree_path: Path) -> None:
     Raises:
         RuntimeError: If the git worktree remove command fails.
     """
+    repo_path = normalize_path(repo_path)
     result = subprocess.run(  # noqa: S603
         [
             "git",

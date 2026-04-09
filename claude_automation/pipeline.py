@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 from .agents import run_agent
 from .config import PipelineConfig, StageResult, Task, TaskResult
 from .task_parser import discover_tasks
-from .worktree import branch_exists, cleanup_worktree, commit_worktree, create_worktree, get_diff
+from .worktree import branch_exists, cleanup_worktree, commit_worktree, create_worktree, get_diff, normalize_path
 
 logger = logging.getLogger(__name__)
 
@@ -222,7 +222,7 @@ def _retry_paused_task(
             return final
 
         task = paused_result.task
-        wt_path = Path(task.project).parent / ".worktrees" / task.branch
+        wt_path = normalize_path(Path(task.project)).parent / ".worktrees" / task.branch
         logger.info(
             "Retrying task '%s' from stage '%s'",
             task.title,
