@@ -7,6 +7,8 @@ name = "claude-automation"
 version = "0.1.4"
 description = "Autonomous pipeline for running Claude Code agents overnight"
 readme = "README.md"
+license = "GPL-3.0-only"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = [
     "apscheduler>=3.10",
