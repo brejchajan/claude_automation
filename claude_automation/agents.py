@@ -62,6 +62,7 @@ def build_command(
     model: str,
     safety_prompt: str,
     working_dir: Path,
+    session_name: str = "",
 ) -> Tuple[str, List[str]]:
     """Build the shell command string and the list of temp files to clean up after execution.
 
@@ -101,7 +102,7 @@ def build_command(
             " --output-format json"
             f" --max-budget-usd {stage_config.budget_usd}"
             f" --model {shlex.quote(model)}"
-            ' --append-system-prompt "$SAFETY"'
+            ' --append-system-prompt "$SAFETY"' + (f" --name {shlex.quote(session_name)}" if session_name else "")
         ),
     ]
     script_content = "\n".join(script_lines) + "\n"
@@ -168,13 +169,14 @@ def run_agent(
     working_dir: Path,
     model: str,
     safety_prompt: str,
+    session_name: str = "",
 ) -> StageResult:
     """Run the claude CLI agent for a single pipeline stage and return the result.
 
     Returns:
         StageResult: Result containing output, success flag, and budget status.
     """
-    cmd, temp_files = build_command(stage_config, prompt, model, safety_prompt, working_dir)
+    cmd, temp_files = build_command(stage_config, prompt, model, safety_prompt, working_dir, session_name)
     start = time.monotonic()
     try:
         try:

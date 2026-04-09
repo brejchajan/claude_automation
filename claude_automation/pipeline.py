@@ -86,7 +86,8 @@ def run_task(
             prompt = build_stage_prompt(task, stage_name, config, accumulated_context, diff)
 
             logger.info("Running stage '%s' for task '%s'", stage_name, task.title)
-            result = run_agent(stage_cfg, prompt, worktree_path, task.model, config.safety_prompt)
+            session_name = f"{task.branch} [{stage_name}]"
+            result = run_agent(stage_cfg, prompt, worktree_path, task.model, config.safety_prompt, session_name)
             result.stage = stage_name
             stage_results.append(result)
 
