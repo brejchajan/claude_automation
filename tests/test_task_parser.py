@@ -104,11 +104,29 @@ def test_discover_tasks_empty_dir(tmp_path):
     assert tasks == []
 
 
-def test_parse_task_depends_on(tmp_path):
+def test_parse_task_depends_on_single(tmp_path):
     md = tmp_path / "task.md"
     md.write_text("---\ntitle: Task B\nproject: /repo\nbranch: BDT-0002\ndepends_on: BDT-0001\n---\nDependent task.\n")
     task = parse_task(md)
-    assert task.depends_on == "BDT-0001"
+    assert task.depends_on == ["BDT-0001"]
+
+
+def test_parse_task_depends_on_comma_separated(tmp_path):
+    md = tmp_path / "task.md"
+    md.write_text(
+        "---\ntitle: Task C\nproject: /repo\nbranch: BDT-0033\ndepends_on: BDT-0031, BDT-0032\n---\nMulti-dep task.\n"
+    )
+    task = parse_task(md)
+    assert task.depends_on == ["BDT-0031", "BDT-0032"]
+
+
+def test_parse_task_depends_on_yaml_list(tmp_path):
+    md = tmp_path / "task.md"
+    md.write_text(
+        "---\ntitle: Task C\nproject: /repo\nbranch: BDT-0033\ndepends_on:\n  - BDT-0031\n  - BDT-0032\n---\nMulti-dep task.\n"
+    )
+    task = parse_task(md)
+    assert task.depends_on == ["BDT-0031", "BDT-0032"]
 
 
 def test_parse_task_no_depends_on(tmp_path):

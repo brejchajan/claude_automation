@@ -59,7 +59,7 @@ class Task:
     stages: List[str]
     description: str
     base_branch: Optional[str] = None
-    depends_on: Optional[str] = None
+    depends_on: Optional[List[str]] = None
     source_path: Optional[str] = None
 
 

@@ -1,10 +1,20 @@
 from pathlib import Path
 import re
-from typing import List
+from typing import List, Optional, Union
 
 import yaml
 
 from .config import Task, VALID_STAGES
+
+
+def _parse_depends_on(value: Optional[Union[str, List[str]]]) -> Optional[List[str]]:
+    if value is None:
+        return None
+    if isinstance(value, list):
+        return [v.strip() for v in value if v.strip()]
+    parts = [v.strip() for v in value.split(",") if v.strip()]
+    return parts or None
+
 
 FRONTMATTER_PARTS = 3
 
@@ -81,7 +91,7 @@ def parse_task(file_path: Path) -> Task:
         stages=stages,
         description=description,
         base_branch=frontmatter.get("base_branch", None),
-        depends_on=frontmatter.get("depends_on", None),
+        depends_on=_parse_depends_on(frontmatter.get("depends_on", None)),
         source_path=str(file_path),
     )
 

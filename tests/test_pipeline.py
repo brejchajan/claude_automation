@@ -278,15 +278,15 @@ class TestRunAllTasks(unittest.TestCase):
 class TestTopologicalSort(unittest.TestCase):
     def test_topological_sort_basic(self) -> None:
         task_a = make_test_task(branch="BDT-0001", title="A", priority=1, stages=["coder"])
-        task_b = make_test_task(branch="BDT-0002", title="B", priority=1, stages=["coder"], depends_on="BDT-0001")
+        task_b = make_test_task(branch="BDT-0002", title="B", priority=1, stages=["coder"], depends_on=["BDT-0001"])
 
         result = topological_sort([task_b, task_a])
         self.assertEqual(result[0].branch, "BDT-0001")
         self.assertEqual(result[1].branch, "BDT-0002")
 
     def test_topological_sort_circular(self) -> None:
-        task_a = make_test_task(branch="BDT-0001", title="A", stages=["coder"], depends_on="BDT-0002")
-        task_b = make_test_task(branch="BDT-0002", title="B", stages=["coder"], depends_on="BDT-0001")
+        task_a = make_test_task(branch="BDT-0001", title="A", stages=["coder"], depends_on=["BDT-0002"])
+        task_b = make_test_task(branch="BDT-0002", title="B", stages=["coder"], depends_on=["BDT-0001"])
         with pytest.raises(ValueError, match="Circular dependency"):
             topological_sort([task_a, task_b])
 
@@ -296,6 +296,17 @@ class TestTopologicalSort(unittest.TestCase):
         result = topological_sort([task_a, task_b])
         self.assertEqual(result[0].branch, "B")
         self.assertEqual(result[1].branch, "A")
+
+    def test_topological_sort_multiple_deps(self) -> None:
+        task_a = make_test_task(branch="BDT-0031", title="A", priority=1, stages=["coder"])
+        task_b = make_test_task(branch="BDT-0032", title="B", priority=2, stages=["coder"])
+        task_c = make_test_task(
+            branch="BDT-0033", title="C", priority=3, stages=["coder"], depends_on=["BDT-0031", "BDT-0032"]
+        )
+        result = topological_sort([task_c, task_b, task_a])
+        branches = [t.branch for t in result]
+        self.assertLess(branches.index("BDT-0031"), branches.index("BDT-0033"))
+        self.assertLess(branches.index("BDT-0032"), branches.index("BDT-0033"))
 
 
 @patch("claude_automation.pipeline.cleanup_worktree")
@@ -316,7 +327,7 @@ class TestDependencyExecution(unittest.TestCase):
         mock_cleanup: MagicMock,
     ) -> None:
         task_a = make_test_task(branch="BDT-0001", title="A", priority=1, stages=["coder"])
-        task_b = make_test_task(branch="BDT-0002", title="B", priority=2, stages=["coder"], depends_on="BDT-0001")
+        task_b = make_test_task(branch="BDT-0002", title="B", priority=2, stages=["coder"], depends_on=["BDT-0001"])
         mock_agent.return_value = StageResult(
             stage="",
             success=False,
@@ -340,7 +351,7 @@ class TestDependencyExecution(unittest.TestCase):
         mock_cleanup: MagicMock,
     ) -> None:
         task_a = make_test_task(branch="BDT-0001", title="A", priority=1, stages=["coder"])
-        task_b = make_test_task(branch="BDT-0002", title="B", priority=2, stages=["coder"], depends_on="BDT-0001")
+        task_b = make_test_task(branch="BDT-0002", title="B", priority=2, stages=["coder"], depends_on=["BDT-0001"])
         mock_agent.return_value = make_success_result("", "done")
         results = run_all_tasks([task_a, task_b], self.config)
         self.assertEqual(len(results), 2)
@@ -348,6 +359,84 @@ class TestDependencyExecution(unittest.TestCase):
         self.assertEqual(results[1].status, "success")
         self.assertEqual(task_b.base_branch, "BDT-0001")
         self.assertEqual(mock_agent.call_count, 2)
+
+    @patch("claude_automation.pipeline.branch_exists", return_value=True)
+    def test_multi_dep_both_satisfied_via_branch_exists(
+        self,
+        mock_branch_exists: MagicMock,
+        mock_agent: MagicMock,
+        mock_create: MagicMock,
+        mock_commit: MagicMock,
+        mock_diff: MagicMock,
+        mock_cleanup: MagicMock,
+    ) -> None:
+        task_c = make_test_task(
+            branch="BDT-0033",
+            title="C",
+            priority=3,
+            stages=["coder"],
+            depends_on=["BDT-0031", "BDT-0032"],
+        )
+        mock_agent.return_value = make_success_result("", "done")
+        results = run_all_tasks([task_c], self.config)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].status, "success")
+
+    @patch("claude_automation.pipeline.branch_exists", return_value=False)
+    def test_multi_dep_one_missing_skips_task(
+        self,
+        mock_branch_exists: MagicMock,
+        mock_agent: MagicMock,
+        mock_create: MagicMock,
+        mock_commit: MagicMock,
+        mock_diff: MagicMock,
+        mock_cleanup: MagicMock,
+    ) -> None:
+        task_a = make_test_task(branch="BDT-0031", title="A", priority=1, stages=["coder"])
+        task_c = make_test_task(
+            branch="BDT-0033",
+            title="C",
+            priority=3,
+            stages=["coder"],
+            depends_on=["BDT-0031", "BDT-0032"],
+        )
+        mock_agent.return_value = StageResult(
+            stage="",
+            success=False,
+            output="",
+            error="failed",
+            duration_seconds=1.0,
+            return_code=1,
+            budget_depleted=False,
+        )
+        results = run_all_tasks([task_a, task_c], self.config)
+        self.assertEqual(len(results), 2)
+        self.assertEqual(results[1].status, "skipped_dependency")
+
+    def test_multi_dep_all_succeed_in_same_run(
+        self,
+        mock_agent: MagicMock,
+        mock_create: MagicMock,
+        mock_commit: MagicMock,
+        mock_diff: MagicMock,
+        mock_cleanup: MagicMock,
+    ) -> None:
+        task_a = make_test_task(branch="BDT-0031", title="A", priority=1, stages=["coder"])
+        task_b = make_test_task(branch="BDT-0032", title="B", priority=2, stages=["coder"])
+        task_c = make_test_task(
+            branch="BDT-0033",
+            title="C",
+            priority=3,
+            stages=["coder"],
+            depends_on=["BDT-0031", "BDT-0032"],
+        )
+        mock_agent.return_value = make_success_result("", "done")
+        results = run_all_tasks([task_a, task_b, task_c], self.config)
+        self.assertEqual(len(results), 3)
+        self.assertEqual(results[0].status, "success")
+        self.assertEqual(results[1].status, "success")
+        self.assertEqual(results[2].status, "success")
+        self.assertEqual(mock_agent.call_count, 3)
 
 
 TASK_MD_TEMPLATE = """\

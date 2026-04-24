@@ -170,8 +170,10 @@ def topological_sort(tasks: List[Task]) -> List[Task]:
             return
         in_stack.add(branch)
         task = branch_map[branch]
-        if task.depends_on and task.depends_on in branch_map:
-            _visit(task.depends_on)
+        if task.depends_on:
+            for dep in task.depends_on:
+                if dep in branch_map:
+                    _visit(dep)
         in_stack.discard(branch)
         visited.add(branch)
         result.append(task)
@@ -258,16 +260,23 @@ def _check_dependency(
     if not task.depends_on:
         return True
 
-    dep_result = branch_to_result.get(task.depends_on)
-    dep_satisfied = dep_result is not None and dep_result.status == "success"
-    if not dep_satisfied and dep_result is None:
-        dep_satisfied = branch_exists(Path(task.project), task.depends_on)
+    unmet = []
+    last_dep = None
+    for dep in task.depends_on:
+        dep_result = branch_to_result.get(dep)
+        satisfied = dep_result is not None and dep_result.status == "success"
+        if not satisfied and dep_result is None:
+            satisfied = branch_exists(Path(task.project), dep)
+        if not satisfied:
+            unmet.append(dep)
+        else:
+            last_dep = dep
 
-    if not dep_satisfied:
+    if unmet:
         logger.warning(
             "Skipping task '%s' — dependency '%s' not met",
             task.title,
-            task.depends_on,
+            ", ".join(unmet),
         )
         skipped = TaskResult(
             task=task,
@@ -281,7 +290,7 @@ def _check_dependency(
         branch_to_result[task.branch] = skipped
         return False
 
-    task.base_branch = task.depends_on
+    task.base_branch = last_dep
     return True
 
 
