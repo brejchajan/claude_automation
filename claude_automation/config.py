@@ -25,7 +25,7 @@ class StageConfig:
     permission_mode: str
     system_prompt: str
     budget_usd: float = 1.0
-    timeout_seconds: int = 1800
+    timeout_seconds: int = 18000
 
 
 @dataclass
@@ -35,7 +35,7 @@ class PipelineConfig:
     tasks_dir: str = "./tasks"
     tasks_done_dir: str = "./tasks_done"
     logs_dir: str = "./logs"
-    default_model: str = "claude-sonnet-4-5-20250514"
+    default_model: str = "claude-sonnet-4-6"
     schedule_cron: str = "0 2 * * *"
     global_budget_cap_usd: float = 10.0
     max_output_chars: int = 30000
