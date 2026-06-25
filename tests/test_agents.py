@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from claude_automation import agents
 from claude_automation.agents import build_command, detect_budget_depleted, parse_output, run_agent
 from claude_automation.config import default_pipeline_config, StageConfig
 
@@ -110,6 +111,46 @@ def test_detect_budget_depleted_false_limit_in_stdout():
 
 def test_detect_budget_depleted_rate_limit():
     assert detect_budget_depleted("", "rate limit reached", 1) is True
+
+
+def test_detect_budget_depleted_session_limit_result():
+    line = '{"type": "result", "result": "You\'ve hit your session limit · resets 3am (Europe/Prague)"}'
+    assert detect_budget_depleted(line, "", 1) is True
+
+
+def test_detect_budget_depleted_session_limit_plain_text():
+    assert detect_budget_depleted("You've hit your session limit · resets 3am (Europe/Prague)", "", 1) is True
+
+
+def test_detect_budget_depleted_usage_limit():
+    assert detect_budget_depleted('{"result": "Claude usage limit reached"}', "", 1) is True
+
+
+def test_detect_budget_depleted_usage_and_limit_flexible():
+    assert detect_budget_depleted("", "you have reached the usage limit for now", 1) is True
+    assert detect_budget_depleted("", "the limit on your usage was exceeded", 1) is True
+
+
+def test_detect_budget_depleted_usage_only_false():
+    assert detect_budget_depleted('{"result": "current memory usage is high"}', "", 0) is False
+
+
+def test_detect_budget_depleted_usage_and_limit_far_apart_false():
+    text = "memory usage is high " + "x " * 40 + "set the limit to 100"
+    assert detect_budget_depleted(f'{{"result": "{text}"}}', "", 0) is False
+
+
+def test_usage_limit_pattern_matches():
+    assert agents.usage_limit_pattern.search("usage limit") is not None
+    assert agents.usage_limit_pattern.search("hit your usage limit reached") is not None
+    assert agents.usage_limit_pattern.search("the limit on your usage") is not None
+    assert agents.usage_limit_pattern.search("usage" + "x" * 40 + "limit") is not None
+
+
+def test_usage_limit_pattern_no_match():
+    assert agents.usage_limit_pattern.search("memory usage is high") is None
+    assert agents.usage_limit_pattern.search("set the limit to 100") is None
+    assert agents.usage_limit_pattern.search("usage" + "x" * 41 + "limit") is None
 
 
 @patch("claude_automation.agents.subprocess.run")
