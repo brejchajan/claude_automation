@@ -186,22 +186,32 @@ def parse_output(stdout: str) -> str:
         return stdout
 
 
+usage_limit_pattern = re.compile(r"usage.{0,40}?limit|limit.{0,40}?usage")
+
+budget_phrases = [
+    "budget depleted",
+    "budget exceeded",
+    "budget limit",
+    "rate limit",
+    "session limit",
+    "hit your limit",
+    "you have hit the limit",
+    "hit the limit",
+]
+
+
 def detect_budget_depleted(stdout: str, stderr: str, return_code: int) -> bool:
     """Return True if the agent output indicates the budget was depleted.
 
     Returns:
         bool: True if budget depletion is detected, False otherwise.
     """
-    budget_phrases = [
-        "budget depleted",
-        "budget exceeded",
-        "budget limit",
-        "rate limit",
-        "you've hit your limit",
-        "you have hit the limit",
-    ]
-    combined = (stderr or "").lower()
-    if any(phrase in combined for phrase in budget_phrases):
+
+    def _matches(text: str) -> bool:
+        lowered = text.lower()
+        return any(phrase in lowered for phrase in budget_phrases) or bool(usage_limit_pattern.search(lowered))
+
+    if _matches(stderr or ""):
         return True
     for line in (stdout or "").splitlines():
         line = line.strip()
@@ -209,14 +219,11 @@ def detect_budget_depleted(stdout: str, stderr: str, return_code: int) -> bool:
             continue
         try:
             data = json.loads(line)
-            error_field = str(data.get("error", "")).lower()
-            if any(phrase in error_field for phrase in budget_phrases):
+            if _matches(str(data.get("error", ""))) or _matches(str(data.get("result", ""))):
                 return True
-            if data.get("stop_reason", "") == "stop_sequence":
-                result_field = str(data.get("result", "")).lower()
-                if any(phrase in result_field for phrase in budget_phrases):
-                    return True
         except (json.JSONDecodeError, AttributeError):
+            if _matches(line):
+                return True
             continue
     return False
 
